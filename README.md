@@ -1,2 +1,2 @@
-# Comos
-Some aspects of the universe in a website.
+** "Space is the breath of art." **
+          — Frank Lloyd Wright

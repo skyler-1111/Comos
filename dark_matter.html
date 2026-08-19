@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DARK MATTER // FILAMENTS</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&family=Inter:wght@100;400;900&family=JetBrains+Mono:wght@100;300;400&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #010203;
+            --fg: #eef2f5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            height: 500vh;
+        }
+
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 500;
+        }
+
+        .film-grain {
+            position: absolute;
+            inset: 0;
+            background: url('grain.png');
+            opacity: 0.06;
+            mix-blend-mode: overlay;
+            pointer-events: none;
+        }
+
+        .vignette {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, transparent 10%, rgba(0, 0, 0, 0.98) 180%);
+        }
+
+        .bars {
+            position: fixed;
+            left: 0;
+            width: 100%;
+            height: 10vh;
+            background: black;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+        }
+
+        .bar-top {
+            top: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            justify-content: space-between;
+        }
+
+        .bar-bottom {
+            bottom: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            justify-content: space-between;
+        }
+
+        .hud-cam {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.25);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .audio-toggle {
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .audio-toggle:hover {
+            opacity: 0.8;
+            color: white;
+        }
+
+        .rec-dot {
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            background: #ffffff;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 0.1; }
+        }
+
+        #hud-left {
+            position: fixed;
+            left: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 600;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .hud-tick {
+            width: 2px;
+            height: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            transition: all 0.4s;
+        }
+
+        .hud-tick.active {
+            background: #fff;
+            height: 32px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+        }
+
+        .cinematic-text {
+            font-family: 'Cormorant Garamond', serif;
+            font-style: italic;
+        }
+
+        .hero-title {
+            font-size: clamp(3.5rem, 11vw, 10rem);
+            font-weight: 900;
+            line-height: 0.82;
+            letter-spacing: -0.05em;
+            text-transform: uppercase;
+        }
+
+        .label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        #scroller {
+            position: relative;
+            z-index: 100;
+        }
+
+        section {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 0 10vw;
+            pointer-events: none;
+        }
+
+        .glass-card {
+            background: rgba(5, 5, 8, 0.7);
+            backdrop-filter: blur(35px);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            padding: 3.5rem;
+            max-width: 500px;
+            pointer-events: auto;
+            transform-style: preserve-3d;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ptr {
+            position: fixed;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2000;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: difference;
+        }
+
+        #ptr-follow {
+            position: fixed;
+            width: 44px;
+            height: 44px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1999;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s ease-out;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-layer">
+        <div class="film-grain"></div>
+        <div class="vignette"></div>
+
+        <div class="bars bar-top">
+            <div class="hud-cam"><span class="rec-dot"></span>REC [ ● ] 00:28:11:04</div>
+            <div class="hud-cam">GRAVITATIONAL LENSING | STRANGE</div>
+        </div>
+        <div class="bars bar-bottom">
+            <div class="hud-cam">DATA: NON-BARYONIC</div>
+            <div id="audio-btn" class="hud-cam audio-toggle">SOUND: OFF</div>
+            <div class="hud-cam">SPECTRAL SENSING: ACTIVE</div>
+        </div>
+
+        <div id="hud-left">
+            <div class="label" style="writing-mode: vertical-rl; margin-bottom: 10px;">Lensing</div>
+            <div class="hud-tick active"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+        </div>
+    </div>
+
+    <div id="ptr"></div>
+    <div id="ptr-follow"></div>
+
+    <div id="canvas-container"></div>
+
+    <audio id="bg-music" loop src="music/music1.mp3"></audio>
+
+    <main id="scroller">
+        <section class="flex-col justify-center items-start">
+            <div class="gs-init pointer-events-auto">
+                <p class="label mb-8">Dark Matter || Non-Baryonic</p>
+                <h1 class="hero-title">THE<br>UNSEEN<br><span class="cinematic-text lowercase text-white/60">architecture.</span></h1>
+                <div class="mt-12 flex items-center gap-6 opacity-40">
+                    <div class="w-16 h-px bg-white"></div>
+                    <p class="text-[9px] tracking-[0.6em] uppercase">Detect Anomaly</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="glass-card gs-scroll-reveal 3d-tilt">
+                <span class="label block mb-4">Interaction</span>
+                <h2 class="text-3xl font-light mb-6 cinematic-text text-white">THE INVISIBLE STUFF</h2>
+                <p class="text-sm text-white/40 leading-loose">
+                    Dark matter doesn’t give off light, so we can’t see it directly. But its gravity acts like an invisible framework, helping hold galaxies together.
+                </p>
+                <div class="mt-8 flex gap-4">
+                    <div class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></div>
+                    <span class="text-[9px] uppercase tracking-widest text-white/20">Gravitational Pull Detected</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="justify-end">
+            <div class="glass-card gs-scroll-reveal text-right 3d-tilt">
+                <span class="label block mb-4">Detection</span>
+                <h2 class="text-3xl font-light mb-6 cinematic-text text-white">SEEING THE UNSEEN</h2>
+                <p class="text-sm text-white/40 leading-loose">
+                   We can learn where this hidden matter is by watching how light bends around it. As light travels through space, gravity bends its path, showing us where the unseen mass is.
+                </p>
+            </div>
+        </section>
+
+        <section class="justify-center text-center">
+            <div class="gs-scroll-reveal">
+                <p class="label mb-8">The Silent Architect</p>
+                <h2 class="text-8xl font-black italic mb-4 text-white" style="letter-spacing: 0.25em;">INVISIBLE</h2>
+                <p class="text-[10px] tracking-[0.5em] opacity-30 uppercase">Structure Mapped</p>
+            </div>
+        </section>
+    </main>
+
+    <script id="starVertex" type="x-shader/x-vertex">
+        uniform float uTime;
+        uniform float uScroll;
+        uniform vec2 umouse;
+        attribute float aPhase;
+        attribute float aFreq;
+        attribute float aSize;
+        varying float vTwinkle;
+        varying vec3 vColor;
+        varying float vLens;
+
+        void main() {
+            vec3 pos = position;
+            
+            vec2 center = umouse * 0.7;
+            float distToCenter = distance(pos.xy, center);
+            
+            float massStrength = 0.4 + uScroll * 1.8;
+            float eRing = 1.0 / (distToCenter + 0.6);
+            
+            vec2 dir = normalize(pos.xy - center);
+            pos.xy += dir * eRing * massStrength;
+
+            float shift = eRing * massStrength * 0.08;
+            vColor = vec3(0.9, 0.95, 1.0);
+            vColor.r += shift * 0.5;
+            vColor.b -= shift * 0.3;
+
+            vLens = eRing * massStrength;
+            vTwinkle = sin(uTime * (aFreq * 0.6) + aPhase) * 0.12 + 0.88;
+
+            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+            gl_PointSize = aSize * (75.0 / length(mvPosition.xyz));
+            gl_Position = projectionMatrix * mvPosition;
+        }
+    </script>
+
+    <script>
+        var mouseCoord = new THREE.Vector2(0, 0);
+        var scene, camera, renderer, starField, audioBtn, audioEl, audioReady = false;
+
+        var starFragmentShader = `
+            varying float vTwinkle;
+            varying vec3 vColor;
+            varying float vLens;
+            void main() {
+                float dist = distance(gl_PointCoord, vec2(0.5));
+                if (dist > 0.5) discard;
+                
+                float core = pow(1.0 - dist * 2.0, 20.0);
+                float gloss = smoothstep(0.5, 0.1, dist) * (0.05 + vLens * 0.1);
+                
+                gl_FragColor = vec4(vColor, (core + gloss) * vTwinkle);
+            }
+        `;
+
+        var ptr = document.getElementById('ptr');
+        var ptrFollow = document.getElementById('ptr-follow');
+        var cardList = document.getElementsByClassName('3d-tilt');
+
+        document.addEventListener('mousemove', function (e) {
+            var xp = e.clientX;
+            var yp = e.clientY;
+            mouseCoord.set((xp / window.innerWidth) * 2 - 1, -(yp / window.innerHeight) * 2 + 1);
+
+            if (ptr) {
+                ptr.style.left = xp + 'px';
+                ptr.style.top = yp + 'px';
+            }
+
+            if (ptrFollow) {
+                ptrFollow.style.left = xp + 'px';
+                ptrFollow.style.top = yp + 'px';
+            }
+
+            for (var x = 0; x < cardList.length; x++) {
+                var card = cardList[x];
+                var rect = card.getBoundingClientRect();
+                var rx = (yp - (rect.top + rect.height / 2)) * 0.01;
+                var ry = (xp - (rect.left + rect.width / 2)) * -0.01;
+                gsap.to(card, { rotateX: rx, rotateY: ry, duration: 2, ease: 'power2.out' });
+            }
+        });
+
+        function startAudio() {
+            if (audioEl && audioEl.paused) {
+                audioEl.play().then(function () {
+                    gsap.to(audioEl, { volume: 0.4, duration: 4, ease: "power2.inOut" });
+                    if (audioBtn) audioBtn.innerText = "SOUND: ON";
+                    audioReady = true;
+                }).catch(function (err) {
+                    console.log("Audio notice:", err);
+                });
+            }
+        }
+
+        window.addEventListener('load', function () {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5.0;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            var starCount = 6000;
+            var starGeo = new THREE.BufferGeometry();
+            var posArr = new Float32Array(starCount * 3);
+            var phaseArr = new Float32Array(starCount);
+            var freqArr = new Float32Array(starCount);
+            var sizeArr = new Float32Array(starCount);
+
+            for (var i = 0; i < starCount; i++) {
+                posArr[i * 3] = (Math.random() - 0.5) * 45.0;
+                posArr[i * 3 + 1] = (Math.random() - 0.5) * 35.0;
+                posArr[i * 3 + 2] = (Math.random() - 0.5) * 10 - 5;
+                phaseArr[i] = Math.random() * (Math.PI * 2.0);
+                freqArr[i] = 0.5 + Math.random() * 1.5;
+                sizeArr[i] = 1.0 + Math.random() * 2.0;
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(posArr, 3));
+            starGeo.setAttribute('aPhase', new THREE.BufferAttribute(phaseArr, 1));
+            starGeo.setAttribute('aFreq', new THREE.BufferAttribute(freqArr, 1));
+            starGeo.setAttribute('aSize', new THREE.BufferAttribute(sizeArr, 1));
+
+            var shaderUniforms = {
+                uTime: { value: 0 },
+                uScroll: { value: 0 },
+                umouse: { value: new THREE.Vector2(0, 0) }
+            };
+
+            var vertexSrc = document.getElementById('starVertex').textContent;
+            var starMat = new THREE.ShaderMaterial({
+                uniforms: shaderUniforms,
+                vertexShader: vertexSrc,
+                fragmentShader: starFragmentShader,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+
+            var ticks = document.getElementsByClassName('hud-tick');
+
+            function loop(time) {
+                var t = time / 1000.0;
+                var scrollRaw = window.scrollY || window.pageYOffset;
+                var maxScroll = document.body.scrollHeight - window.innerHeight;
+                var scrollPct = maxScroll > 0 ? (scrollRaw / maxScroll) : 0;
+
+                shaderUniforms.uTime.value = t;
+                shaderUniforms.uScroll.value = scrollPct;
+                shaderUniforms.umouse.value.lerp(mouseCoord, 0.05);
+
+                starField.rotation.y = t * 0.02;
+                starField.rotation.x = t * 0.01;
+
+                var activeIdx = Math.floor(scrollPct * 6.0);
+                for (var q = 0; q < ticks.length; q++) {
+                    if (q === activeIdx) ticks[q].className = 'hud-tick active';
+                    else ticks[q].className = 'hud-tick';
+                }
+
+                renderer.render(scene, camera);
+                requestAnimationFrame(loop);
+            }
+            requestAnimationFrame(loop);
+
+            gsap.registerPlugin(ScrollTrigger);
+            gsap.from('.gs-init', { opacity: 0, scale: 0.98, duration: 3, ease: 'sine.out' });
+
+            var revealCards = document.querySelectorAll('.gs-scroll-reveal');
+            for (var j = 0; j < revealCards.length; j++) {
+                var card = revealCards[j];
+                gsap.to(card, {
+                    scrollTrigger: {
+                        trigger: card,
+                        start: "top 85%"
+                    },
+                    opacity: 1,
+                    y: 0,
+                    duration: 2,
+                    ease: "expo.out"
+                });
+            }
+
+            audioEl = document.getElementById('bg-music');
+            audioBtn = document.getElementById('audio-btn');
+
+            function unlockAudio() {
+                if (!audioReady) startAudio();
+                window.removeEventListener('mousedown', unlockAudio);
+                window.removeEventListener('touchstart', unlockAudio);
+                window.removeEventListener('scroll', unlockAudio);
+            }
+            window.addEventListener('mousedown', unlockAudio);
+            window.addEventListener('touchstart', unlockAudio);
+            window.addEventListener('scroll', unlockAudio);
+
+            if (audioBtn) {
+                audioBtn.onclick = function (e) {
+                    e.stopPropagation();
+                    if (!audioEl) return;
+                    if (audioEl.paused) {
+                        startAudio();
+                    } else {
+                        audioEl.pause();
+                        audioBtn.innerText = "SOUND: OFF";
+                    }
+                };
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            if (camera && renderer) {
+                var w = window.innerWidth;
+                var h = window.innerHeight;
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+            }
+        });
+    </script>
+</body>
+
+</html>

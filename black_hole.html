@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLACK HOLE</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300&family=Inter:wght@100;400;900&family=JetBrains+Mono:wght@100;300;400&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #000;
+            --fg: #fff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            height: 500vh;
+        }
+
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 500;
+        }
+
+        .grain {
+            position: absolute;
+            inset: 0;
+            background: url('grain.png');
+            opacity: 0.1;
+            mix-blend-mode: overlay;
+            pointer-events: none;
+        }
+
+        .vignette {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, transparent 30%, black 140%);
+        }
+
+        .bars {
+            position: fixed;
+            left: 0;
+            width: 100%;
+            height: 8vh;
+            background: black;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            padding: 0 40px;
+        }
+
+        .bar-top {
+            top: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            justify-content: space-between;
+        }
+
+        .bar-bottom {
+            bottom: 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            justify-content: space-between;
+        }
+
+        .hud-cam {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.3);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+        }
+
+        .audio-toggle {
+            cursor: pointer;
+            transition: opacity 0.3s;
+        }
+
+        .audio-toggle:hover {
+            opacity: 0.6;
+        }
+
+        #hud-left {
+            position: fixed;
+            left: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 600;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .hud-tick {
+            width: 2px;
+            height: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+        }
+
+        .hud-tick.active {
+            background: #fff;
+            height: 30px;
+            box-shadow: 0 0 10px #fff;
+        }
+
+        .cinematic-text {
+            font-family: 'Cormorant Garamond', serif;
+            font-style: italic;
+        }
+
+        .hero-title {
+            font-size: clamp(3rem, 12vw, 11rem);
+            line-height: 0.85;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            text-transform: uppercase;
+        }
+
+        .label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            letter-spacing: 0.4em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        #scroller {
+            position: relative;
+            z-index: 100;
+        }
+
+        section {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 0 10vw;
+            pointer-events: none;
+        }
+
+        .glass-card {
+            background: rgba(10, 10, 10, 0.75);
+            backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 3rem;
+            max-width: 450px;
+            pointer-events: auto;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ptr {
+            position: fixed;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2000;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: difference;
+        }
+
+        #ptr-follow {
+            position: fixed;
+            width: 46px;
+            height: 46px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1999;
+            transform: translate(-50%, -50%);
+            transition: transform 0.15s ease-out;
+        }
+
+        .glitch-flash {
+            position: fixed;
+            inset: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1500;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-layer">
+        <div class="grain"></div>
+        <div class="vignette"></div>
+        <div class="bars bar-top">
+            <div class="hud-cam">REC [ ● ] 00:44:12:08</div>
+            <div class="hud-cam">SINGLE-SOURCE  ACCRETION</div>
+        </div>
+        <div class="bars bar-bottom">
+            <div class="hud-cam">ISO 800 || F/2.8</div>
+            <div id="audio-btn" class="hud-cam audio-toggle">SOUND: OFF</div>
+            <div class="hud-cam">MASTER || ANAMORPHIC</div>
+        </div>
+        <div class="glitch-flash"></div>
+
+        <div id="hud-left">
+            <div class="label" style="writing-mode: vertical-rl; margin-bottom: 10px;">Dilation</div>
+            <div class="hud-tick active"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+            <div class="hud-tick"></div>
+        </div>
+    </div>
+
+    <div id="ptr"></div>
+    <div id="ptr-follow"></div>
+
+    <div id="canvas-container"></div>
+
+    <audio id="bg-music" loop src="music/music2.mp3"></audio>
+
+    <main id="scroller">
+        <section class="flex-col justify-center items-start">
+            <div class="gs-init pointer-events-auto">
+                <p class="label mb-8">Event Horizon || Depth 0.0</p>
+                <h1 class="hero-title">BEYOND<br>THE<br><span class="cinematic-text lowercase text-white/90">void.</span></h1>
+                <div class="mt-12 flex items-center gap-6 opacity-40">
+                    <div class="w-16 h-px bg-white"></div>
+                    <p class="text-[9px] tracking-[0.6em] uppercase">Initialize Descent</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="glass-card gs-scroll-reveal 3d-tilt">
+                <span class="label block mb-4">Space-Time || 01</span>
+                <h2 class="text-3xl font-light mb-6 cinematic-text text-white">PHOTON SPHERE</h2>
+                <p class="text-sm text-white/50 leading-loose">
+                    At this distance, gravity is so strong that photons travel in orbits. Light curves into a closed loop around the event horizon.
+                </p>
+                <div class="mt-8 flex gap-4">
+                    <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                    <span class="text-[9px] uppercase tracking-widest text-white/30">Stable Orbit Detected</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="justify-end">
+            <div class="glass-card gs-scroll-reveal text-right 3d-tilt">
+                <span class="label block mb-4">Entropy</span>
+                <h2 class="text-3xl font-light mb-6 cinematic-text text-white">SPAGHETTIFICATION</h2>
+                <p class="text-sm text-white/50 leading-loose">
+                    As matter falls deeper into the strong gravitational pull, it gets stretched thinner and thinner.
+                    The difference in gravity from one side to the other pulls it into long, thin strands.
+
+                </p>
+            </div>
+        </section>
+
+        <section class="justify-center text-center">
+            <div class="gs-scroll-reveal">
+                <p class="label mb-8">Singularity</p>
+                <h2 class="text-8xl font-black italic mb-4 text-white" style="letter-spacing: 0.25em;">STAY.</h2>
+                <p class="text-[10px] tracking-[0.5em] opacity-40 uppercase">Core Proximity Reached</p>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        function lrp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        var mouseparticles = new THREE.Vector2();
+        var particles, scene, cam, renderer, uniforms, audioBtn, audioEl, audioReady = false;
+        var f_sh = `
+uniform float uTime;
+uniform vec2 uResolution, umouse;
+uniform float uScroll;
+float nse(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123); }
+void main() {
+vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution.xy) / min(uResolution.y, uResolution.x);
+uv += vec2((nse(vec2(uTime * 0.8, 0.0)) - 0.5) * 0.0015, (nse(vec2(0.0, uTime * 0.8)) - 0.5) * 0.0015);
+vec2 mo = umouse * 0.1; uv -= mo; uv /= (0.75 + uScroll * 1.3);
+float d = length(uv), holeRadius = 0.15, l = (holeRadius * holeRadius) / (d + 0.01), wd = d + l, dk = 0.0;
+float a = atan(uv.y, uv.x) + (uTime * mix(0.4, 0.05, uScroll));
+if (wd > 0.22 && wd < 0.6) {
+float i = smoothstep(0.22, 0.35, wd) * smoothstep(0.6, 0.45, wd);
+dk = i * (0.6 + 0.4 * nse(vec2(wd * 10.0, a * 3.5 - uTime * 1.5)));
+dk += smoothstep(0.01, 0.0, abs(wd - 0.19)) * 1.5;
+}
+vec3 col = mix(vec3(0.2, 0.02, 0.0), vec3(1.0, 0.5, 0.1), dk) * (1.0 - smoothstep(holeRadius, holeRadius - 0.01, d));
+col += vec3(1.0, 0.6, 0.2) * smoothstep(0.0015, 0.0, abs(uv.y + mo.y * 0.5)) * (dk * 0.4);
+col += vec3(1.0, 0.3, 0.05) * exp(-d * 5.0) * 0.1;
+gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+        var ptr = document.getElementById("ptr");
+        var ptrFollow = document.getElementById("ptr-follow");
+        var cardElements = document.getElementsByClassName('3d-tilt');
+
+        document.addEventListener('mousemove', function (e) {
+            var mx = e.clientX;
+            var my = e.clientY;
+            mouseparticles.set((mx / window.innerWidth) * 2 - 1, -(my / window.innerHeight) * 2 + 1);
+
+            if (ptr) {
+                ptr.style.left = mx + "px";
+                ptr.style.top = my + "px";
+            }
+
+            if (ptrFollow) {
+                ptrFollow.style.left = mx + "px";
+                ptrFollow.style.top = my + "px";
+            }
+
+            for (var k = 0; k < cardElements.length; k++) {
+                var card = cardElements[k];
+                var rect = card.getBoundingClientRect();
+                var centerX = rect.left + (rect.width / 2);
+                var centerY = rect.top + (rect.height / 2);
+                var rotX = (my - centerY) * 0.02;
+                var rotY = (mx - centerX) * -0.02;
+                gsap.to(card, { rotateX: rotX, rotateY: rotY, duration: 1 });
+            }
+        });
+
+        function tryPlay() {
+            if (audioEl && audioEl.paused) {
+                audioEl.play().then(function () {
+                    gsap.to(audioEl, { volume: 0.4, duration: 3 });
+                    if (audioBtn) audioBtn.innerHTML = "SOUND: ON";
+                    audioReady = true;
+                }).catch(function (err) {
+                    console.log("Autoplay check:", err);
+                });
+            }
+        }
+
+        var bgMesh; 
+        window.addEventListener('load', function () {
+            scene = new THREE.Scene();
+            cam = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            cam.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            var mapTex = new THREE.TextureLoader().load('particle.png');
+            var geoData = new THREE.BufferGeometry();
+            var posBuff = new Float32Array(3000);
+            for (var i = 0; i < 3000; i++) {
+                posBuff[i] = (Math.random() - 0.5) * 15.0;
+            }
+            geoData.setAttribute('position', new THREE.BufferAttribute(posBuff, 3));
+            particles = new THREE.Points(geoData, new THREE.PointsMaterial({
+                size: 0.06,
+                color: 0x88aaff,
+                transparent: true,
+                opacity: 0.6,
+                map: mapTex,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            }));
+            scene.add(particles);
+
+            uniforms = {
+                uTime: { value: 0 },
+                uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+                uScroll: { value: 0 },
+                umouse: { value: mouseparticles }
+            };
+
+            var planeGeo = new THREE.PlaneGeometry(20, 20);
+            var planeMat = new THREE.ShaderMaterial({
+                uniforms: uniforms,
+                vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position, 1.0); }",
+                fragmentShader: f_sh,
+                transparent: true
+            });
+            bgMesh = new THREE.Mesh(planeGeo, planeMat);
+            bgMesh.position.set(0, 0, -1);
+            scene.add(bgMesh);
+
+            gsap.registerPlugin(ScrollTrigger);
+            
+            ScrollTrigger.create({
+                trigger: "body",
+                start: "top top",
+                onUpdate: function () {
+                    if (Math.random() > 0.995) {
+                        gsap.to('.glitch-flash', { opacity: 0.1, duration: 0.05, yoyo: true, repeat: 1 });
+                    }
+                }
+            });
+
+            var allTicks = document.getElementsByClassName('hud-tick');
+
+            function frameLoop(timestamp) {
+                var timeVal = timestamp / 1000.0;
+                uniforms.uTime.value = timeVal;
+
+                var scrollRaw = window.scrollY || window.pageYOffset;
+                var maxScroll = document.body.scrollHeight - window.innerHeight;
+                var scrollPct = maxScroll > 0 ? (scrollRaw / maxScroll) : 0;
+
+                uniforms.uScroll.value = lrp(uniforms.uScroll.value, scrollPct, 0.10);
+                uniforms.umouse.value.lerp(mouseparticles, 0.04);
+
+                particles.rotation.y = timeVal * 0.0001;
+                particles.rotation.x = uniforms.uScroll.value * 2.0;
+
+                particles.position.x = (-1.0 * mouseparticles.x) * 0.5;
+                particles.position.y = mouseparticles.y * 0.5;
+
+                var currentTick = Math.floor(scrollPct * 6.0);
+                for (var j = 0; j < allTicks.length; j++) {
+                    if (j === currentTick) {
+                        allTicks[j].className = "hud-tick active";
+                    } else {
+                        allTicks[j].className = "hud-tick";
+                    }
+                }
+
+                renderer.render(scene, cam);
+                window.requestAnimationFrame(frameLoop);
+            }
+            window.requestAnimationFrame(frameLoop);
+
+            audioEl = document.getElementById('bg-music');
+            audioBtn = document.getElementById('audio-btn');
+
+            function unlockAudio() {
+                if (!audioReady) tryPlay();
+                window.removeEventListener('mousedown', unlockAudio);
+                window.removeEventListener('touchstart', unlockAudio);
+                window.removeEventListener('scroll', unlockAudio);
+            }
+            window.addEventListener('mousedown', unlockAudio);
+            window.addEventListener('touchstart', unlockAudio);
+            window.addEventListener('scroll', unlockAudio);
+
+            if (audioBtn) {
+                audioBtn.onclick = function (evt) {
+                    evt.stopPropagation();
+                    if (!audioEl) return;
+                    if (audioEl.paused) {
+                        tryPlay();
+                    } else {
+                        audioEl.pause();
+                        audioBtn.innerText = "SOUND: OFF";
+                    }
+                };
+            }
+
+            gsap.from('.gs-init', {
+                opacity: 0,
+                y: 50,
+                duration: 2.0,
+                ease: "power4.out",
+                delay: 0.3
+            });
+
+            var revealTargets = document.querySelectorAll('.gs-scroll-reveal');
+            for (var m = 0; m < revealTargets.length; m++) {
+                var item = revealTargets[m];
+                gsap.to(item, {
+                    scrollTrigger: {
+                        trigger: item,
+                        start: "top 80%",
+                        toggleActions: "play none none reverse"
+                    },
+                    opacity: 1,
+                    y: 0,
+                    duration: 1.2,
+                    ease: "power2.out"
+                });
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            if (cam && renderer) {
+                cam.aspect = window.innerWidth / window.innerHeight;
+                cam.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                if (uniforms) uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
+</body>
+
+</html>
